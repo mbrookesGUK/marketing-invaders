@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing Invaders</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #0ff;
+            font-family: 'Courier New', monospace;
+        }
+        #gameContainer {
+            position: relative;
+            width: 1000px;
+            margin: 50px auto;
+            filter: contrast(1.2);
+        }
+        #canvas {
+            border: 3px solid #0ff;
+            background: #000;
+            box-shadow: 0 0 10px #0ff;
+        }
+        #gameContainer::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 255, 255, 0.1) 0px,
+                rgba(0, 255, 255, 0.1) 1px,
+                transparent 1px,
+                transparent 3px
+            );
+            pointer-events: none;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            text-shadow: 0 0 5px #0ff;
+        }
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            text-align: center;
+            border: 2px solid #f0f;
+            color: #0ff;
+        }
+        #termDescriptions {
+            margin-top: 20px;
+            text-align: left;
+            max_height: 200px;
+            overflow-y: auto;
+        }
+        #startScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+        
+        #startScreen h1 {
+            font-size: 2.5em;
+            text-shadow: 0 0 10px #0ff;
+            margin-bottom: 30px;
+        }
+        
+        #startScreen select {
+            background: #000;
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 8px;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #000;
+            color: #0ff;
+            border: 2px solid #0ff;
+            padding: 10px 20px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0ff;
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <h1>MARKETING INVADERS</h1>
+        <p>Select Difficulty:</p>
+        <select id="startDifficulty" title="Select starting difficulty">
+            <option value="0">Easy</option>
+            <option value="1">Medium</option>
+            <option value="2">Hard</option>
+        </select>
+        <br>
+        <button onclick="startGame()">START GAME</button>
+    </div>
+    <div id="gameContainer" style="display: none;">
+        <canvas id="canvas" width="1000" height="600"></canvas>
+        <div id="score">SCORE: 0 | DIFFICULTY: <select id="difficulty" title="Select difficulty level" onchange="setDifficulty(this.value)">
+            <option value="0">Easy</option>
+            <option value="1" selected>Medium</option>
+            <option value="2">Hard</option>
+        </select></div>
+        <div id="gameOver">
+            <h2>GAME OVER</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <div id="termDescriptions"></div>
+            <button onclick="location.reload()">NEW GAME</button>
+            <button onclick="shareScore()" style="margin-left: 10px;">SHARE SCORE</button>
+        </div>
+        <div style="margin-top: 20px; font-size: 0.8em;">
+            <a href="https://www.linkedin.com/in/matthewjbrookes/" target="_blank" rel="noopener" style="color: #0ff; text-decoration: none; margin: 0 10px;">LinkedIn</a>
+            <a href="https://www.generateuk.co.uk/" target="_blank" rel="noopener" style="color: #0ff; text-decoration: none; margin: 0 10px;">Generate UK</a>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const MARKETING_TERMS = [
+            {term: 'SEO', points: 10, speed: 1.5, color: '#0ff', description: 'Search Engine Optimization - Improving website visibility in search results'}, 
+            {term: 'CTR', points: 15, speed: 2.0, color: '#f0f', description: 'Click-Through Rate - Percentage of users who click on a link'},
+            {term: 'KPI', points: 20, speed: 1.0, color: '#ff0', description: 'Key Performance Indicator - Measurable value demonstrating effectiveness'},
+            {term: 'ROI', points: 25, speed: 2.5, color: '#00f', description: 'Return on Investment - Profitability measure of an investment'},
+            {term: 'CRM', points: 10, speed: 0.5, color: '#0f0', description: 'Customer Relationship Management - Managing company interactions with customers'},
+            {term: 'SEM', points: 30, speed: 3.0, color: '#f00', description: 'Search Engine Marketing - Paid advertising to increase search visibility'},
+            {term: 'PPC', points: 20, speed: 1.8, color: '#ff0', description: 'Pay-Per-Click - Online advertising model where advertisers pay per click'}
+        ];
+        const TRACER_COLORS = ['#0ff', '#f0f', '#ff0', '#00f', '#0ff'];
+        const DIFFICULTY_LEVELS = [
+            {label: 'Easy', spawnMod: 0.3, speedMod: 0.3},
+            {label: 'Medium', spawnMod: 0.5, speedMod: 0.4},
+            {label: 'Hard', spawnMod: 0.6, speedMod: 0.6}
+        ];
+        
+        let seenTerms = new Set();
+        let player = {
+            x: canvas.width/2 - 25,
+            y: canvas.height - 50,
+            width: 50,
+            height: 30,
+            speed: 12,
+            projectiles: [],
+            lastShot: 0
+        };
+
+        let enemies = [];
+        let score = 0;
+        let gameOver = false;
+        let enemySpawnRate = 100;
+        let currentDifficulty = 1;
+        let scoreMultiplier = 1.0;
+
+        // Track key states
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            Space: false
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if (gameOver) return;
+            if (e.key === 'ArrowLeft') keys.ArrowLeft = true;
+            if (e.key === 'ArrowRight') keys.ArrowRight = true;
+            if (e.key === ' ') keys.Space = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.ArrowLeft = false;
+            if (e.key === 'ArrowRight') keys.ArrowRight = false;
+            if (e.key === ' ') keys.Space = false;
+        });
+
+        function handlePlayerMovement() {
+            if (keys.ArrowLeft) {
+                player.x = Math.max(0, player.x - player.speed);
+            }
+            if (keys.ArrowRight) {
+                player.x = Math.min(canvas.width - player.width, player.x + player.speed);
+            }
+            if (keys.Space && Date.now() - player.lastShot > 200) {
+                player.projectiles.push({
+                    x: player.x + player.width/2 - 2.5,
+                    y: player.y,
+                    width: 5,
+                    height: 10,
+                    speed: 15,
+                    particles: [],
+                    lastParticle: Date.now()
+                });
+                player.lastShot = Date.now();
+            }
+        }
+
+        function setDifficulty(level) {
+            currentDifficulty = parseInt(level);
+            const diff = DIFFICULTY_LEVELS[currentDifficulty];
+            scoreMultiplier = diff.speedMod;
+            enemySpawnRate = 100 * diff.spawnMod;
+        }
+        
+        function showTermDescriptions() {
+            const descriptionsDiv = document.getElementById('termDescriptions');
+            descriptionsDiv.innerHTML = '';
+            seenTerms.forEach(term => {
+                const termData = MARKETING_TERMS.find(t => t.term === term);
+                if (termData) {
+                const p = document.createElement('p');
+                p.innerHTML = `<strong><a href="https://learningseo.io/seo_roadmap/seo-fundamentals/" target="_blank" style="color: inherit; text-decoration: none;">${term}</a>:</strong> ${termData.description}`;
+                descriptionsDiv.appendChild(p);
+                }
+            });
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (Math.random() * enemySpawnRate < 1) {
+                enemies.push(createEnemy());
+                enemySpawnRate *= 0.98;
+            }
+            
+            enemies.forEach(enemy => {
+                enemy.y += enemy.speed;
+                if (enemy.y + enemy.height > canvas.height) {
+                    gameOver = true;
+                    document.getElementById('gameOver').style.display = 'block';
+                    document.getElementById('finalScore').textContent = score;
+                    showTermDescriptions();
+                }
+            });
+            
+            handlePlayerMovement();
+            updateProjectiles();
+            drawPlayer();
+            drawEnemies();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateProjectiles() {
+            player.projectiles = player.projectiles.filter(proj => {
+                proj.y -= proj.speed;
+                
+                if (Date.now() - proj.lastParticle > 50) {
+                    proj.particles.push({
+                        x: proj.x + proj.width/2,
+                        y: proj.y,
+                        alpha: 1.0,
+                        color: TRACER_COLORS[Math.floor(Math.random() * TRACER_COLORS.length)]
+                    });
+                    proj.lastParticle = Date.now();
+                }
+                
+                proj.particles.forEach(p => {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fillRect(p.x, p.y, 3, 3);
+                    p.alpha -= 0.1;
+                    p.y += 2;
+                });
+                ctx.globalAlpha = 1.0;
+
+                enemies = enemies.filter(enemy => {
+                    const collision = proj.x > enemy.x && 
+                                   proj.x < enemy.x + enemy.width &&
+                                   proj.y > enemy.y && 
+                                   proj.y < enemy.y + enemy.height;
+                    if (collision) {
+                        const termPoints = enemy.termData.points * scoreMultiplier;
+                        score += termPoints;
+                        seenTerms.add(enemy.termData.term);
+                        document.getElementById('score').textContent = `SCORE: ${Math.round(score)} (${termPoints.toFixed(1)}) | DIFFICULTY: ${DIFFICULTY_LEVELS[currentDifficulty].label}`;
+                    }
+                    return !collision;
+                });
+                
+                return proj.y > 0;
+            });
+        }
+
+        function startGame() {
+            // Reset game state
+            seenTerms.clear();
+            enemies = [];
+            player.projectiles = [];
+            score = 0;
+            gameOver = false;
+            enemySpawnRate = 100;
+            
+            // Update UI
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            document.getElementById('gameOver').style.display = 'none';
+            
+            // Initialize game with selected difficulty
+            const selectedDifficulty = document.getElementById('startDifficulty').value;
+            document.getElementById('difficulty').value = selectedDifficulty;
+            setDifficulty(selectedDifficulty);
+            document.getElementById('score').textContent = `SCORE: 0 | DIFFICULTY: ${DIFFICULTY_LEVELS[selectedDifficulty].label}`;
+            
+            gameLoop();
+        }
+
+        function createEnemy() {
+            const term = MARKETING_TERMS[Math.floor(Math.random() * MARKETING_TERMS.length)];
+            return {
+                x: Math.random() * (canvas.width - 50),
+                y: -50,
+                width: 50,
+                height: 30,
+                speed: term.speed * DIFFICULTY_LEVELS[currentDifficulty].speedMod,
+                termData: term
+            };
+        }
+
+        function drawPlayer() {
+            ctx.fillStyle = '#0ff';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        function shareScore() {
+            const score = document.getElementById('finalScore').textContent;
+            const url = encodeURIComponent(window.location.href);
+            const text = encodeURIComponent(`Hey I just scored ${score} on Marketing Invaders!`);
+            window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${url}&text=${text}`, '_blank');
+        }
+
+        function drawEnemies() {
+            enemies.forEach(enemy => {
+                ctx.fillStyle = enemy.termData.color;
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+                ctx.fillStyle = '#000';
+                ctx.font = '12px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText(enemy.termData.term, enemy.x + enemy.width/2, enemy.y + enemy.height/2 + 4);
+            });
+        }
+    </script>
+</body>
+</html>
