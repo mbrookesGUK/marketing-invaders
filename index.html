@@ -14,14 +14,30 @@
         }
         #gameContainer {
             position: relative;
-            width: 1000px;
-            margin: 50px auto;
+            width: 100%;
+            max-width: 1000px;
+            margin: 20px auto;
             filter: contrast(1.2);
         }
         #canvas {
             border: 3px solid #0ff;
             background: #000;
             box-shadow: 0 0 10px #0ff;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 1000/600;
+        }
+        @media (max-width: 768px) {
+            #gameContainer {
+                margin: 10px auto;
+            }
+            #score {
+                font-size: 18px;
+            }
+            button {
+                padding: 15px 25px;
+                font-size: 1.1em;
+            }
         }
         #gameContainer::after {
             content: "";
@@ -154,12 +170,37 @@
         ];
         
         let seenTerms = new Set();
+        // Mobile controls
+        const mobileControls = document.createElement('div');
+        mobileControls.id = 'mobileControls';
+        mobileControls.style.display = 'none';
+        mobileControls.innerHTML = `
+            <div style="position: fixed; bottom: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between;">
+                <button id="leftBtn" style="width: 80px; height: 80px; border-radius: 50%;">←</button>
+                <button id="shootBtn" style="width: 80px; height: 80px; border-radius: 50%;">FIRE</button>
+                <button id="rightBtn" style="width: 80px; height: 80px; border-radius: 50%;">→</button>
+            </div>
+        `;
+        document.body.appendChild(mobileControls);
+
+        // Check for mobile
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+            mobileControls.style.display = 'block';
+            document.getElementById('leftBtn').addEventListener('touchstart', () => keys.ArrowLeft = true);
+            document.getElementById('leftBtn').addEventListener('touchend', () => keys.ArrowLeft = false);
+            document.getElementById('rightBtn').addEventListener('touchstart', () => keys.ArrowRight = true);
+            document.getElementById('rightBtn').addEventListener('touchend', () => keys.ArrowRight = false);
+            document.getElementById('shootBtn').addEventListener('touchstart', () => keys.Space = true);
+            document.getElementById('shootBtn').addEventListener('touchend', () => keys.Space = false);
+        }
+
         let player = {
             x: canvas.width/2 - 25,
             y: canvas.height - 50,
             width: 50,
             height: 30,
-            speed: 12,
+            speed: isMobile ? 8 : 12, // Slower movement on mobile
             projectiles: [],
             lastShot: 0
         };
@@ -237,9 +278,9 @@
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            if (Math.random() * enemySpawnRate < 1) {
+            if (Math.random() * enemySpawnRate < (isMobile ? 0.8 : 1)) {
                 enemies.push(createEnemy());
-                enemySpawnRate *= 0.98;
+                enemySpawnRate *= isMobile ? 0.99 : 0.98; // Slightly slower difficulty ramp on mobile
             }
             
             enemies.forEach(enemy => {
